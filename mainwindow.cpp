@@ -308,7 +308,10 @@ void MainWindow::on_push_button_open_clicked(void)
 
 void MainWindow::on_push_button_send_clicked(void)
 {
+    uint8_t temp = rc_command_;
+    rc_command_ = RC_COMMAND_CONTROL;
     this->sendBufferToSerialPort();
+    rc_command_ = temp;
 }
 
 void MainWindow::addBits8ToBuffer(uint8_t data)

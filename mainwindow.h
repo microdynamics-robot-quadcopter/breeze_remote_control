@@ -1,11 +1,15 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include <QList>
+#include <QString>
 #include <QMainWindow>
 #include <QKeyEvent>
 #include <QtSerialPort/QSerialPort>
 #include <QtSerialPort/QSerialPortInfo>
-#include <QString>
+#include <QCamera>
+#include <QCameraInfo>
+#include <QCameraViewfinder>
 
 #define BUFFER_DATA_WIDTH     16
 
@@ -16,6 +20,8 @@
 
 #define RC_DATA_LENGTH_VOID   0x00
 #define RC_DATA_LENGTH_BYTE_8 0x08
+
+#define RC_CAMERA_NAME        "@device:pnp:\\\\?\\usb#vid_18ec&pid_5555&mi_00#8&19de01dc&0&0000#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\\global"
 
 namespace Ui {
 class MainWindow;
@@ -37,9 +43,12 @@ public:
     bool clearSerialPort(void);
     bool openSerialPort(void);
     QSerialPort::BaudRate getSerialBaudRate(void);
+    QSerialPort::DataBits getSerialDataBits(void);
+    QSerialPort::StopBits getSerialStopBits(void);
 protected:
     void keyPressEvent(QKeyEvent *event);
 private slots:
+    void on_push_button_clear_clicked(void);
     void on_push_button_close_clicked(void);
     void on_push_button_open_clicked(void);
     void on_push_button_send_clicked(void);
@@ -49,18 +58,22 @@ private:
     void sendBufferToSerialPort(void);
     uint16_t getConstrainedValue(uint16_t data);
 private:
-    char            send_buffer_[BUFFER_DATA_WIDTH];
-    uint8_t         send_checksum_;
-    uint8_t         send_count_;
-    uint8_t         rc_command_;
-    uint8_t         data_step_;
-    uint16_t        data_roll_;
-    uint16_t        data_pitch_;
-    uint16_t        data_yaw_;
-    uint16_t        data_thrust_;
-    uint32_t        serial_baud_rate_;
-    QString         serial_port_name_;
-    QSerialPort    *serial_port_;
+    char                   send_buffer_[BUFFER_DATA_WIDTH];
+    uint8_t                send_checksum_;
+    uint8_t                send_count_;
+    uint8_t                rc_command_;
+    uint8_t                data_step_;
+    uint16_t               data_roll_;
+    uint16_t               data_pitch_;
+    uint16_t               data_yaw_;
+    uint16_t               data_thrust_;
+    uint32_t               serial_baud_rate_;
+    QString                serial_port_name_;
+    QSerialPort           *serial_port_;
+    QList<QSerialPortInfo> serial_ports_info_;
+    QCamera               *camera_;
+    QList<QCameraInfo>     cameras_info_;
+    QCameraViewfinder     *camera_view_finder_;
     Ui::MainWindow *ui;
 };
 

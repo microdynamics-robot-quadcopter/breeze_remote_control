@@ -13,10 +13,16 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->line_edit_yaw->setText("1500");
     ui->line_edit_thrust->setText("1500");
 
+    ui->push_button_open->setFocus();
+    ui->push_button_open->setEnabled(true);
+    ui->push_button_close->setEnabled(false);
+    ui->push_button_clear->setEnabled(false);
+    ui->push_button_send->setEnabled(false);
+
     ui->statusBar->showMessage("Open software successfully!", 3000);
 
-    this->setWindowTitle("Breeze Remote Control");
-    this->setFixedSize(430, 260);
+    this->setWindowTitle("Breeze Remote Control V1");
+    this->setFixedSize(1120, 730);
 
     rc_command_ = RC_COMMAND_INVALID;
 
@@ -35,6 +41,35 @@ MainWindow::MainWindow(QWidget *parent) :
     serial_baud_rate_ = 115200;
     serial_port_name_ = "COM3";
     serial_port_      = new QSerialPort();
+
+    serial_ports_info_ = QSerialPortInfo::availablePorts();
+
+    foreach (const QSerialPortInfo &serial_port_info, serial_ports_info_) {
+        qDebug() << serial_port_info.portName();
+        if (serial_port_info.portName() !=
+            ui->combo_box_port_name->currentText()) {
+            ui->combo_box_port_name->addItem(serial_port_info.portName());
+        }
+    }
+
+    ui->combo_box_port_name->setCurrentIndex(1);
+
+    cameras_info_ = QCameraInfo::availableCameras();
+
+    foreach (const QCameraInfo &camera_info, cameras_info_) {
+        qDebug() << camera_info.deviceName();
+        if (camera_info.deviceName() == RC_CAMERA_NAME) {
+            camera_ = new QCamera(camera_info);
+        }
+    }
+
+    camera_             = new QCamera(this);
+    camera_view_finder_ = new QCameraViewfinder(this);
+
+    ui->horizontal_layout_camera->addWidget(camera_view_finder_);
+
+    camera_->setViewfinder(camera_view_finder_);
+    camera_->start();
 }
 
 MainWindow::~MainWindow()
@@ -42,11 +77,22 @@ MainWindow::~MainWindow()
     delete ui;
     this->closeSerialPort();
     delete serial_port_;
+    camera_->stop();
+    delete camera_;
+    delete camera_view_finder_;
 }
 
 void MainWindow::closeSerialPort(void)
 {
     if (serial_port_->isOpen()) {
+        ui->combo_box_port_name->setEnabled(true);
+        ui->combo_box_baud_rate->setEnabled(true);
+        ui->combo_box_data_bits->setEnabled(true);
+        ui->combo_box_stop_bits->setEnabled(true);
+        ui->push_button_open->setEnabled(true);
+        ui->push_button_close->setEnabled(false);
+        ui->push_button_clear->setEnabled(false);
+        ui->push_button_send->setEnabled(false);
         serial_port_->close();
     }
 }
@@ -82,6 +128,11 @@ uint8_t MainWindow::readDataFromSerial(char *buffer, uint8_t size,
         }
     }
 
+    QString string = ui->text_edit_recv->toPlainText();
+    string += tr(buffer);
+    ui->text_edit_recv->clear();
+    ui->text_edit_recv->append(string);
+
     return length;
 }
 
@@ -107,10 +158,11 @@ uint8_t MainWindow::writeDataToSerial(const char *buffer, uint8_t size)
 
 bool MainWindow::clearSerialPort(void)
 {
+    ui->text_edit_recv->clear();
+    ui->text_edit_send->clear();
+
     if (serial_port_->isOpen()) {
-        serial_port_->clear();
-        this->closeSerialPort();
-        return this->openSerialPort();
+        return serial_port_->clear();
     }
     else {
         return false;
@@ -123,11 +175,11 @@ bool MainWindow::openSerialPort(void)
         return true;
     }
 
-    serial_port_->setPortName(serial_port_name_);
+    serial_port_->setPortName(ui->combo_box_port_name->currentText());
     serial_port_->setBaudRate(this->getSerialBaudRate());
     serial_port_->setParity(QSerialPort::NoParity);
-    serial_port_->setDataBits(QSerialPort::Data8);
-    serial_port_->setStopBits(QSerialPort::OneStop);
+    serial_port_->setDataBits(this->getSerialDataBits());
+    serial_port_->setStopBits(this->getSerialStopBits());
     serial_port_->setFlowControl(QSerialPort::NoFlowControl);
     serial_port_->setReadBufferSize(1024);
 
@@ -136,7 +188,7 @@ bool MainWindow::openSerialPort(void)
 
 QSerialPort::BaudRate MainWindow::getSerialBaudRate(void)
 {
-    switch (serial_baud_rate_) {
+    switch (ui->combo_box_baud_rate->currentText().toUInt()) {
         case 1200: {
             return QSerialPort::Baud1200;
         }
@@ -163,6 +215,42 @@ QSerialPort::BaudRate MainWindow::getSerialBaudRate(void)
         }
         default: {
             return QSerialPort::UnknownBaud;
+        }
+    }
+}
+
+QSerialPort::DataBits MainWindow::getSerialDataBits(void)
+{
+    switch (ui->combo_box_data_bits->currentText().toUShort()) {
+        case 5: {
+            return QSerialPort::Data5;
+        }
+        case 6: {
+            return QSerialPort::Data6;
+        }
+        case 7: {
+            return QSerialPort::Data7;
+        }
+        case 8: {
+            return QSerialPort::Data8;
+        }
+        default: {
+            return QSerialPort::UnknownDataBits;
+        }
+    }
+}
+
+QSerialPort::StopBits MainWindow::getSerialStopBits(void)
+{
+    switch (ui->combo_box_stop_bits->currentText().toUShort()) {
+        case 1: {
+            return QSerialPort::OneStop;
+        }
+        case 2: {
+            return QSerialPort::TwoStop;
+        }
+        default: {
+            return QSerialPort::UnknownStopBits;
         }
     }
 }
@@ -276,10 +364,31 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     ui->line_edit_yaw->setText(QString::number(data_yaw_, 10));
     ui->line_edit_thrust->setText(QString::number(data_thrust_, 10));
 
+    ui->progress_bar_roll->setValue(data_roll_);
+    ui->progress_bar_pitch->setValue(data_pitch_);
+    ui->progress_bar_yaw->setValue(data_yaw_);
+    ui->progress_bar_thrust->setValue(data_thrust_);
+
     ui->statusBar->showMessage("Data Step:" +
                                QString::number(data_step_, 10) +
                                " | " + "RC Command:" +
                                QString::number(rc_command_, 10));
+}
+
+void MainWindow::on_push_button_clear_clicked(void)
+{
+    const char *string_a = "Clear serial port successfully!";
+    const char *string_b = "Failed to clear serial port!";
+
+    if (this->clearSerialPort()) {
+        ui->statusBar->showMessage(string_a, 3000);
+        qDebug("%s", string_a);
+    }
+    else {
+        ui->statusBar->showMessage(string_b, 3000);
+        qDebug("%s", string_b);
+    }
+
 }
 
 void MainWindow::on_push_button_close_clicked(void)
@@ -297,6 +406,14 @@ void MainWindow::on_push_button_open_clicked(void)
     const char *string_b = "Failed to open serial port!";
 
     if (this->openSerialPort()) {
+        ui->combo_box_port_name->setEnabled(false);
+        ui->combo_box_baud_rate->setEnabled(false);
+        ui->combo_box_data_bits->setEnabled(false);
+        ui->combo_box_stop_bits->setEnabled(false);
+        ui->push_button_open->setEnabled(false);
+        ui->push_button_close->setEnabled(true);
+        ui->push_button_clear->setEnabled(true);
+        ui->push_button_send->setEnabled(true);
         ui->statusBar->showMessage(string_a, 3000);
         qDebug("%s", string_a);
     }

@@ -37,14 +37,12 @@ public:
     void closeSerialPort(void);
     void setSerialBaudRate(uint32_t baud_rate);
     void setSerialPortName(QString &port_name);
-    uint8_t readDataFromSerial(char *buffer, uint8_t size,
-                               uint16_t timeout = 1000);
     uint8_t writeDataToSerial(const char *buffer, uint8_t size);
     bool clearSerialPort(void);
     bool openSerialPort(void);
-    QSerialPort::BaudRate getSerialBaudRate(void);
-    QSerialPort::DataBits getSerialDataBits(void);
-    QSerialPort::StopBits getSerialStopBits(void);
+    QSerialPort::BaudRate getSerialBaudRate(void) const;
+    QSerialPort::DataBits getSerialDataBits(void) const;
+    QSerialPort::StopBits getSerialStopBits(void) const;
 protected:
     void keyPressEvent(QKeyEvent *event);
 private slots:
@@ -52,6 +50,7 @@ private slots:
     void on_push_button_close_clicked(void);
     void on_push_button_open_clicked(void);
     void on_push_button_send_clicked(void);
+    void readDataFromSerial(void);
 private:
     void addBits8ToBuffer(uint8_t data);
     void addBits16ToBuffer(uint16_t data);
@@ -74,7 +73,7 @@ private:
     QCamera               *camera_;
     QList<QCameraInfo>     cameras_info_;
     QCameraViewfinder     *camera_view_finder_;
-    Ui::MainWindow *ui;
+    Ui::MainWindow        *ui;
 };
 
 #endif // MAINWINDOW_H

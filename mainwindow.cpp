@@ -13,10 +13,15 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->line_edit_yaw->setText("1500");
     ui->line_edit_thrust->setText("1500");
 
+    ui->line_edit_roll->setEnabled(false);
+    ui->line_edit_pitch->setEnabled(false);
+    ui->line_edit_yaw->setEnabled(false);
+    ui->line_edit_thrust->setEnabled(false);
+
     ui->push_button_open->setFocus();
     ui->push_button_open->setEnabled(true);
     ui->push_button_close->setEnabled(false);
-    ui->push_button_clear->setEnabled(false);
+    ui->push_button_clear->setEnabled(true);
     ui->push_button_send->setEnabled(false);
 
     ui->statusBar->showMessage("Open software successfully!", 3000);
@@ -91,7 +96,7 @@ void MainWindow::closeSerialPort(void)
         ui->combo_box_stop_bits->setEnabled(true);
         ui->push_button_open->setEnabled(true);
         ui->push_button_close->setEnabled(false);
-        ui->push_button_clear->setEnabled(false);
+        ui->push_button_clear->setEnabled(true);
         ui->push_button_send->setEnabled(false);
         serial_port_->close();
     }
@@ -107,33 +112,19 @@ void MainWindow::setSerialPortName(QString &port_name)
     serial_port_name_ = port_name;
 }
 
-uint8_t MainWindow::readDataFromSerial(char *buffer, uint8_t size,
-                                       uint16_t timeout)
+void MainWindow::readDataFromSerial(void)
 {
-    uint8_t length = 0;
+    QByteArray buffer = serial_port_->readAll();
 
-    forever {
-        int number = serial_port_->read(&buffer[length], size - length);
-        if (number == -1) {
-            return -1;
-        }
-        else if (number == 0 && !serial_port_->waitForReadyRead(timeout)) {
-            return -2;
-        }
-        else {
-            length += number;
-            if (size == length) {
-                break ;
-            }
-        }
+    if(!buffer.isEmpty())
+    {
+        QString string = ui->text_edit_recv->toPlainText();
+        string += tr(buffer);
+        ui->text_edit_recv->clear();
+        ui->text_edit_recv->append(string);
     }
 
-    QString string = ui->text_edit_recv->toPlainText();
-    string += tr(buffer);
-    ui->text_edit_recv->clear();
-    ui->text_edit_recv->append(string);
-
-    return length;
+    buffer.clear();
 }
 
 uint8_t MainWindow::writeDataToSerial(const char *buffer, uint8_t size)
@@ -183,10 +174,13 @@ bool MainWindow::openSerialPort(void)
     serial_port_->setFlowControl(QSerialPort::NoFlowControl);
     serial_port_->setReadBufferSize(1024);
 
+    connect(serial_port_, &QSerialPort::readyRead, this,
+            &MainWindow::readDataFromSerial);
+
     return serial_port_->open(QSerialPort::ReadWrite);
 }
 
-QSerialPort::BaudRate MainWindow::getSerialBaudRate(void)
+QSerialPort::BaudRate MainWindow::getSerialBaudRate(void) const
 {
     switch (ui->combo_box_baud_rate->currentText().toUInt()) {
         case 1200: {
@@ -219,7 +213,7 @@ QSerialPort::BaudRate MainWindow::getSerialBaudRate(void)
     }
 }
 
-QSerialPort::DataBits MainWindow::getSerialDataBits(void)
+QSerialPort::DataBits MainWindow::getSerialDataBits(void) const
 {
     switch (ui->combo_box_data_bits->currentText().toUShort()) {
         case 5: {
@@ -240,7 +234,7 @@ QSerialPort::DataBits MainWindow::getSerialDataBits(void)
     }
 }
 
-QSerialPort::StopBits MainWindow::getSerialStopBits(void)
+QSerialPort::StopBits MainWindow::getSerialStopBits(void) const
 {
     switch (ui->combo_box_stop_bits->currentText().toUShort()) {
         case 1: {
@@ -425,10 +419,7 @@ void MainWindow::on_push_button_open_clicked(void)
 
 void MainWindow::on_push_button_send_clicked(void)
 {
-    uint8_t temp = rc_command_;
-    rc_command_ = RC_COMMAND_CONTROL;
-    this->sendBufferToSerialPort();
-    rc_command_ = temp;
+    serial_port_->write(ui->text_edit_send->toPlainText().toUtf8());
 }
 
 void MainWindow::addBits8ToBuffer(uint8_t data)
@@ -439,7 +430,7 @@ void MainWindow::addBits8ToBuffer(uint8_t data)
 
 void MainWindow::addBits16ToBuffer(uint16_t data)
 {
-    this->addBits8ToBuffer((uint8_t)(data & 0XFF));
+    this->addBits8ToBuffer((uint8_t)(data & 0xFF));
     this->addBits8ToBuffer((uint8_t)(data >> 8));
 }
 
@@ -451,8 +442,8 @@ void MainWindow::sendBufferToSerialPort(void)
 
     send_count_ = 0;
 
-    this->addBits8ToBuffer(0XAA);
-    this->addBits8ToBuffer(0XAA);
+    this->addBits8ToBuffer(0xAA);
+    this->addBits8ToBuffer(0xAA);
 
     send_checksum_ = 0;
 
